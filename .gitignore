@@ -2,15 +2,20 @@
 *build*
 
 # VSCode
-.vscode/
+.vscode/.cortex-debug*
 
 # CLion
-.idea/
+.idea
+*/.idea
+
+# Matlab
+slprj
+*.slxc
+*.autosave
 
 # MDK-ARM
-.MDK-ARM
-DebugConfig
-RTE
+*DebugConfig*
+**/RTE/
 *uvguix*
 
 *.o
@@ -31,3 +36,6 @@ RTE
 *.bat
 *.Bak
 *.__i
+
+# excel
+~$*.xlsx

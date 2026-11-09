@@ -1,3 +1,8 @@
-BasedOnStyle:	Chromium
-
-BinPackParameters: true
+Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 100
+IndentWrappedFunctionNames: true
+PackConstructorInitializers: Never
+RemoveParentheses: MultipleParentheses
+WrapNamespaceBodyWithEmptyLines: Always
+BinPackParameters: OnePerLine
