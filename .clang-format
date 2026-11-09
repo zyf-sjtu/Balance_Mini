@@ -4,5 +4,6 @@ ColumnLimit: 100
 IndentWrappedFunctionNames: true
 PackConstructorInitializers: Never
 RemoveParentheses: MultipleParentheses
+ReflowComments: Never
 WrapNamespaceBodyWithEmptyLines: Always
 BinPackParameters: OnePerLine
