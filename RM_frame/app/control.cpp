@@ -29,7 +29,6 @@ void robotControl(void);
 void boardLedHandle(void);
 
 extern RC rc;
-extern IMU board_imu;
 
 WBRChassis chassis(&WML, &WMR, &JML1, &JML2, &JMR1, &JMR2, &board_imu);
 BoardLed led;
@@ -41,6 +40,7 @@ enum RobotPowerState_e {
   STARTUP = 1,
   WORKING = 2,
 } robot_state;
+
 // 初始化标志
 bool robot_init_flag = false;
 uint32_t boot_tick = 0;
@@ -58,7 +58,7 @@ const float leg_length_rate = 5e-7f;
 const float chassis_gyro_speed = -3.0f * PI;
 const float gimbal_rate = 6e-4f;
 const float chassis_yaw_speed_rate = 2e-6f;
-}  // namespace rcctrl
+} // namespace rcctrl
 
 // 控制初始化
 void controlInit(void) {
@@ -80,14 +80,13 @@ void controlLoop(void) {
     allMotorsStopShutoff();
     robotReset();
   } else if (robot_state == STARTUP) {
-    allMotorsOn();                     // 电机上电
-    robot_init_flag = robotStartup();  // 开机状态判断
+    allMotorsOn(); // 电机上电
+    robot_init_flag = robotStartup(); // 开机状态判断
   } else if (robot_state == WORKING) {
-    allMotorsOn();   // 电机上电
-    robotControl();  // 机器人控制
+    allMotorsOn(); // 电机上电
+    robotControl(); // 机器人控制
   }
   //设定目标值
-  chassis.mappingRef(0.f);
   chassis.handle();
   boardLedHandle();
   boardBuzzerHandle();
@@ -142,6 +141,7 @@ bool robotStartup(void) {
 
 // 机器人控制
 void robotControl(void) {
+  // TODO 档位控制
   // 遥控器挡位左上右上
   if (rc.switch_.l == RC::UP && rc.switch_.r == RC::UP) {
     chassis.mode_ = WBRChassis::DIRECT;
@@ -177,13 +177,13 @@ void robotControl(void) {
 void boardLedHandle(void) {
 #ifdef DBC
   if (robot_state == STOP) {
-    led.setColor(255, 0, 0);  // red
+    led.setColor(255, 0, 0); // red
     led.setModeOn();
   } else if (robot_state == STARTUP) {
-    led.setColor(150, 150, 0);  // yellow
+    led.setColor(150, 150, 0); // yellow
     led.setModeBreath();
   } else if (robot_state == WORKING) {
-    led.setColor(0, 0, 255);  // blue
+    led.setColor(0, 0, 255); // blue
     if (rc.switch_.l == RC::UP && rc.switch_.r == RC::UP) {
       // 遥控器挡位左上右上
       led.setModeBlink(1);
@@ -207,28 +207,28 @@ void boardLedHandle(void) {
   led.handle();
 #elif defined DBA
   if (robot_state == STOP) {
-    led.setLED(true, false, 0);  // red
+    led.setLED(true, false, 0); // red
   } else if (robot_state == STARTUP) {
-    led.setLED(true, true, 0);  // red+green
+    led.setLED(true, true, 0); // red+green
   } else if (robot_state == WORKING) {
     if (rc.switch_.l == RC::UP && rc.switch_.r == RC::UP) {
       // 遥控器挡位左上右上
-      led.setLED(false, true, 1);  // green
+      led.setLED(false, true, 1); // green
     } else if (rc.switch_.l == RC::MID && rc.switch_.r == RC::UP) {
       // 遥控器挡位左中右上
-      led.setLED(false, true, 2);  // green
+      led.setLED(false, true, 2); // green
     } else if (rc.switch_.l == RC::DOWN && rc.switch_.r == RC::UP) {
       // 遥控器挡位左下右上
-      led.setLED(false, true, 3);  // green
+      led.setLED(false, true, 3); // green
     } else if (rc.switch_.l == RC::UP && rc.switch_.r == RC::MID) {
       // 遥控器挡位左上右中
-      led.setLED(false, true, 4);  // green
+      led.setLED(false, true, 4); // green
     } else if (rc.switch_.l == RC::MID && rc.switch_.r == RC::MID) {
       // 遥控器挡位左中右中
-      led.setLED(false, true, 5);  // green
+      led.setLED(false, true, 5); // green
     } else if (rc.switch_.l == RC::DOWN && rc.switch_.r == RC::MID) {
       // 遥控器挡位左下右中
-      led.setLED(false, true, 6);  // green
+      led.setLED(false, true, 6); // green
     }
   }
 #endif

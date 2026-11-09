@@ -10,16 +10,19 @@
  */
 
 #include "app/chassis.h"
+#include "base/common/math.h"
+
+#include <cmath>
 
 WBRChassis::WBRChassis(Motor* wml, Motor* wmr, Motor* jml1, Motor* jml2,
                        Motor* jmr1, Motor* jmr2, IMU* chassis_imu)
-    : wml_(wml),
-      wmr_(wmr),
-      jml1_(jml1),
-      jml2_(jml2),
-      jmr1_(jmr1),
-      jmr2_(jmr2),
-      imu_(chassis_imu) {
+  : wml_(wml),
+    wmr_(wmr),
+    jml1_(jml1),
+    jml2_(jml2),
+    jmr1_(jmr1),
+    jmr2_(jmr2),
+    imu_(chassis_imu) {
   jump_controller_.stage = JumpController_t::JumpStage_e::FINISH;
 }
 
@@ -33,46 +36,6 @@ void WBRChassis::init(void) {
   jmr1_->setFdbSrc(&jmr1_->kf_data_.x[0], &jmr1_->kf_data_.x[1]);
   jmr2_->setFdbSrc(&jmr2_->kf_data_.x[0], &jmr2_->kf_data_.x[1]);
   TOF_IIC_Update_All_Data(&tof_.tof_data);
-}
-
-// 目标状态映射(跟随/陀螺)
-void WBRChassis::mappingRef(float delta_phi) {
-  ref_.delta_phi = delta_phi;
-  // 跟随模式
-  if (mode_ == WBRChassis::FOLLOW || mode_ == WBRChassis::CRAWL) {
-    if (fabs(ref_.vx) > 0.1f || fabs(ref_.vy) > 0.1f) {
-      ref_.extra_phi = atan2f(ref_.vy, ref_.vx);
-    }
-    ref_.sd_D1 = sqrtf(ref_.vx * ref_.vx + ref_.vy * ref_.vy) *
-                 cosf(ref_.delta_phi + ref_.extra_phi) *
-                 fabs(cosf(ref_.delta_phi + ref_.extra_phi));
-    float phi_err[2] = {
-        math::loopLimit(ref_.delta_phi + ref_.extra_phi, -PI, PI),
-        math::loopLimit(ref_.delta_phi + ref_.extra_phi + PI, -PI, PI),
-    };
-    if (fabs(phi_err[0]) < fabs(phi_err[1])) {
-      ref_.phid = fdb_.phi + phi_err[0];
-    } else {
-      ref_.phid = fdb_.phi + phi_err[1];
-    }
-    ref_.phid = fdb_.phi;
-    if(ref_.follow_locked){ // 云台回头
-      ref_.phid = fdb_.phi;
-    }
-  }
-  // 陀螺模式
-  else if (mode_ == WBRChassis::GYRO) {
-    ref_.wz = math::limit(ref_.wz, -4.f * PI, 4.f * PI);
-    ref_.wz = math::limit(ref_.wz, -ref_.wz_max, ref_.wz_max);
-    ref_.sd_D1 = 0.8f * (2.f * math::sign(ref_.wz) * ref_.vx *
-                             sinf(ref_.delta_phi - ref_.wz * 0.07f) +
-                         2.f * math::sign(ref_.wz) * ref_.vy *
-                             cosf(ref_.delta_phi - ref_.wz * 0.07f));
-    if (fabs(ref_.sd_D1) > 0.1f) {
-      ref_.wz *= 0.7f;
-    }
-    ref_.phid += ref_.wz * 1e-3f;
-  }
 }
 
 // 底盘控制总函数
@@ -98,23 +61,23 @@ void WBRChassis::handle(void) {
   }
   // WBR控制(DIRECT/FOLLOW/GYRO/JUMP)
   else {
-    WBRController();  // 控制器
-    predictor();      // 状态预测器
+    WBRController(); // 控制器
+    predictor(); // 状态预测器
   }
 }
 
 // 跳跃指令
 void WBRChassis::setJump(WBRChassis::JumpCmd_e cmd) {
-  if (cmd == WBRChassis::JumpCmd_e::START) {
-    // 前一次跳跃完成后可执行下一次跳跃指令
-    if (jump_controller_.stage == JumpController_t::JumpStage_e::FINISH) {
-      jump_controller_.stage = JumpController_t::JumpStage_e::START;
-      jump_controller_.tick = HAL_GetTick();
-    }
-  } else if (cmd == WBRChassis::JumpCmd::ABORT) {
-    // 中止跳跃动作，进入常规控制状态
-    jump_controller_.stage = JumpController_t::JumpStage_e::FINISH;
-  }
+  // if (cmd == WBRChassis::JumpCmd_e::START) {
+  //   // 前一次跳跃完成后可执行下一次跳跃指令
+  //   if (jump_controller_.stage == JumpController_t::JumpStage_e::FINISH) {
+  //     jump_controller_.stage = JumpController_t::JumpStage_e::START;
+  //     jump_controller_.tick = HAL_GetTick();
+  //   }
+  // } else if (cmd == WBRChassis::JumpCmd::ABORT) {
+  //   // 中止跳跃动作，进入常规控制状态
+  //   jump_controller_.stage = JumpController_t::JumpStage_e::FINISH;
+  // }
 }
 
 // WBR控制器
@@ -124,7 +87,7 @@ void WBRChassis::WBRController(void) {
   // 腿部控制器
   legController();
   // 跳跃控制器
-  jumpController();
+  // jumpController();
   // 腿部关节力矩控制(映射+关节限位)
   jointController();
 
@@ -173,55 +136,21 @@ void WBRChassis::locomotionController(void) {
     // 跳跃中轮离地降速
   }
 
-  // 轮速限制力矩补偿
-  locomotion_controller_.speed_limit.theta_w_D1_max =
-      ref_.sd_D1_max / param_.R_w * 1.2f;
-  if (fabs(sensor_.theta_wl_D1) >
-      locomotion_controller_.speed_limit.theta_w_D1_max) {
-    locomotion_controller_.speed_limit.T_lwl =
-        locomotion_controller_.speed_limit.pid.calc(
-            locomotion_controller_.speed_limit.theta_w_D1_max *
-                math::sign(sensor_.theta_wl_D1),
-            sensor_.theta_wl_D1);
-  } else {
-    locomotion_controller_.speed_limit.T_lwl = 0;
-  }
-  if (fabs(sensor_.theta_wr_D1) >
-      locomotion_controller_.speed_limit.theta_w_D1_max) {
-    locomotion_controller_.speed_limit.T_lwr =
-        locomotion_controller_.speed_limit.pid.calc(
-            locomotion_controller_.speed_limit.theta_w_D1_max *
-                math::sign(sensor_.theta_wr_D1),
-            sensor_.theta_wr_D1);
-  } else {
-    locomotion_controller_.speed_limit.T_lwr = 0;
-  }
-
-  // 腿部力矩：运动控制器 + 自适应 + 限速补偿
+  // 腿部力矩：运动控制器 + 自适应
   u_.T_lwl = locomotion_controller_.u[0] +
-             locomotion_controller_.model_adapt.T_lwl +
-             locomotion_controller_.speed_limit.T_lwl;
+             locomotion_controller_.model_adapt.T_lwl;
   u_.T_lwr = locomotion_controller_.u[1] +
-             locomotion_controller_.model_adapt.T_lwr +
-             locomotion_controller_.speed_limit.T_lwr;
+             locomotion_controller_.model_adapt.T_lwr;
   u_.T_bll = locomotion_controller_.u[2];
   u_.T_blr = locomotion_controller_.u[3];
 }
 
 // 腿部控制器
 void WBRChassis::legController(void) {
-  ref_.psid_D1 = leg_controller_.psi_ppid.calc(ref_.psid, fdb_.psi);
-  leg_controller_.F_psi =
-      leg_controller_.psi_spid.calc(ref_.psid_D1, fdb_.psi_D1);
-  leg_controller_.F_l = leg_controller_.l_pid.calc(ref_.ld, fdb_.l);
-  leg_controller_.F_g = leg_controller_.gravity_ff(param_.m_b, param_.m_l);
-  leg_controller_.F_i = leg_controller_.inertia_ff(
-      fdb_.s_D1, fdb_.phi_D1, ref_.ld, param_.m_b, param_.m_l, param_.R_l);
+  // TODO 腿部控制器设计
 
-  u_.F_bll = leg_controller_.F_psi + leg_controller_.F_l + leg_controller_.F_g -
-             leg_controller_.F_i;
-  u_.F_blr = -leg_controller_.F_psi + leg_controller_.F_l +
-             leg_controller_.F_g + leg_controller_.F_i;
+  u_.F_bll =;
+  u_.F_blr =;
 }
 
 // 关节控制器
@@ -246,26 +175,26 @@ void WBRChassis::sensor(void) {
   const float joint_angle_l1 =
       param_.joint_reference_angle_deg +
       (jml1_->motor_data_.ecd_angle - param_.joint_encoder_offset_deg[0]) /
-          jml1_->ratio_;
+      jml1_->ratio_;
   const float joint_angle_l2 =
       param_.joint_reference_angle_deg +
       (jml2_->motor_data_.ecd_angle - param_.joint_encoder_offset_deg[1]) /
-          jml2_->ratio_;
+      jml2_->ratio_;
   const float joint_angle_r1 =
       param_.joint_reference_angle_deg +
       (jmr1_->motor_data_.ecd_angle - param_.joint_encoder_offset_deg[2]) /
-          jmr1_->ratio_;
+      jmr1_->ratio_;
   const float joint_angle_r2 =
       param_.joint_reference_angle_deg +
       (jmr2_->motor_data_.ecd_angle - param_.joint_encoder_offset_deg[3]) /
-          jmr2_->ratio_;
-  sensor_.theta_bjl1 = math::deg2rad(math::loopLimit(joint_angle_l1,0.f,360.f));
+      jmr2_->ratio_;
+  sensor_.theta_bjl1 = math::deg2rad(math::loopLimit(joint_angle_l1, 0.f, 360.f));
   sensor_.theta_bjl1_D1 = math::dps2radps(jml1_->realSpeed());
-  sensor_.theta_bjl2 = math::deg2rad(math::loopLimit(joint_angle_l2,0.f,360.f));
+  sensor_.theta_bjl2 = math::deg2rad(math::loopLimit(joint_angle_l2, 0.f, 360.f));
   sensor_.theta_bjl2_D1 = math::dps2radps(jml2_->realSpeed());
-  sensor_.theta_bjr1 = math::deg2rad(math::loopLimit(joint_angle_r1,0.f,360.f));
+  sensor_.theta_bjr1 = math::deg2rad(math::loopLimit(joint_angle_r1, 0.f, 360.f));
   sensor_.theta_bjr1_D1 = math::dps2radps(jmr1_->realSpeed());
-  sensor_.theta_bjr2 = math::deg2rad(math::loopLimit(joint_angle_r2,0.f,360.f));
+  sensor_.theta_bjr2 = math::deg2rad(math::loopLimit(joint_angle_r2, 0.f, 360.f));
   sensor_.theta_bjr2_D1 = math::dps2radps(jmr2_->realSpeed());
   sensor_.theta_b = imu_->euler_rad_.pitch - param_.pitch_bias;
   sensor_.theta_b_D1 = imu_->gyro_sensor_[1];
@@ -377,7 +306,8 @@ void WBRChassis::predictor(void) {
   //   }
   //   predictor_.xhat[i] = xhat_i;
   // }
-  for (int i = 1; i <= 3; i += 2) {  // 仅预测轮速，降低计算消耗
+  for (int i = 1; i <= 3; i += 2) {
+    // 仅预测轮速，降低计算消耗
     float xhat_i = fdb_.x[i];
     for (int j = 0; j < 10; j++) {
       xhat_i += model_.A[i][j] * fdb_.x[j] * 1e-3f;
@@ -398,69 +328,17 @@ void WBRChassis::predictor(void) {
 
 // 处理目标状态
 void WBRChassis::handleRef(void) {
-
   // 目标状态处理
-  ref_.sd_D1 = math::limit(ref_.sd_D1, fdb_.s_D1 - 0.5f, fdb_.s_D1 + 0.5f);
-  ref_.sd_D1 = math::limit(ref_.sd_D1, -ref_.sd_D1_max, ref_.sd_D1_max);
-  // 速度参考积分，并限制在实测位移附近，避免位置参考漂移
-  ref_.sd += ref_.sd_D1 * 1e-3f;
-  ref_.sd = math::limit(ref_.sd, fdb_.s - 0.2f, fdb_.s + 0.2f);
-
-  ref_.phid = math::loopLimit(ref_.phid, fdb_.phi - PI, fdb_.phi + PI);
-  ref_.wz = math::limit(ref_.wz, -ref_.wz_max, ref_.wz_max);
-  ref_.phid_D1 = ref_.wz;
-  ref_.l = math::limit(ref_.l, 0.05f, 0.2f);
-  // 机体倾角过大时缩短腿长
-  // ref_.l_extra = math::limit((fabs(fdb_.theta_b) - 0.15f) * 2.5f, 0.f, 0.25f);
-  // ref.l = math::limit(ref_.l + ref_.l_extra, 0.05f, 0.2f);
-  ref_.ld = math::limit(ref_.l, 0.05f, 0.2f);
+  // TODO reference处理（限幅，限变化幅度）
 
   ref_.xd[0] = ref_.sd;
   ref_.xd[1] = ref_.sd_D1;
   ref_.xd[2] = ref_.phid;
   ref_.xd[3] = ref_.phid_D1;
-
-  // 爬行模式限速
-  if (mode_ == WBRChassis::CRAWL) {
-    ref_.sd_D1 = math::limit(ref_.sd_D1, -1.5f, 1.5f);
-    ref_.wz = math::limit(ref_.wz, -2.f * PI, 2.f * PI);
-  }
 }
 
 void WBRChassis::crawlController(void) {
-  crawl_controller_.jl1_u = math::limit(
-      -sensor_.theta_bjl1_D1 * crawl_controller_.crawl_joint_damping, -10.f,
-      10.f);
-  crawl_controller_.jl2_u = math::limit(
-      -sensor_.theta_bjl2_D1 * crawl_controller_.crawl_joint_damping, -10.f,
-      10.f);
-  crawl_controller_.jr1_u = math::limit(
-      -sensor_.theta_bjr1_D1 * crawl_controller_.crawl_joint_damping, -10.f,
-      10.f);
-  crawl_controller_.jr2_u = math::limit(
-      -sensor_.theta_bjr2_D1 * crawl_controller_.crawl_joint_damping, -10.f,
-      10.f);
-
-  crawl_controller_.wml_follow_speed = -(ref_.phid - fdb_.phi) * 6;
-  crawl_controller_.wmr_follow_speed = (ref_.phid - fdb_.phi) * 6;
-
-  crawl_controller_.wml_u = crawl_controller_.wml_spid.calc(
-      (ref_.sd_D1 + crawl_controller_.wml_follow_speed * param_.R_l) /
-          param_.R_w,
-      sensor_.theta_wl_D1);
-  crawl_controller_.wmr_u = crawl_controller_.wmr_spid.calc(
-      (ref_.sd_D1 + crawl_controller_.wmr_follow_speed * param_.R_l) /
-          param_.R_w,
-      sensor_.theta_wr_D1);
-
-  wml_->mode_ = Motor::WORKING;
-  wmr_->mode_ = Motor::WORKING;
-  wml_->targetTorque() = crawl_controller_.wml_u;
-  wmr_->targetTorque() = crawl_controller_.wmr_u;
-  jml1_->targetTorque() = crawl_controller_.jl1_u;
-  jml2_->targetTorque() = crawl_controller_.jl2_u;
-  jmr1_->targetTorque() = crawl_controller_.jr1_u;
-  jmr2_->targetTorque() = crawl_controller_.jr2_u;
+  // 占位，非必做项
 }
 
 // 停止状态控制
@@ -492,78 +370,29 @@ void WBRChassis::stopController(void) {
 
 // 跳跃控制
 void WBRChassis::jumpController(void) {
+  // 非必做项
   if (jump_controller_.stage == JumpController_t::JumpStage_e::FINISH) {
     return;
   }
   // 开始阶段
   else if (jump_controller_.stage == JumpController_t::JumpStage_e::START) {
-    jump_controller_.stage = JumpController_t::JumpStage_e::SQUAT;
-    jump_controller_.tick = HAL_GetTick();
   }
   // 下蹲阶段
   else if (jump_controller_.stage == JumpController_t::JumpStage_e::SQUAT) {
-    ref_.ld = 0.05f;
-    jump_controller_.F_l = jump_controller_.l_pid_squat.calc(ref_.ld, fdb_.l);
-    if ((fabs(ref_.ld - fdb_.l) < 0.02f &&
-         HAL_GetTick() - jump_controller_.tick > 120) ||
-        HAL_GetTick() - jump_controller_.tick > 150) {
-      // 手动跳跃
-      if (!jump_controller_.prepare_stair) {
-        jump_controller_.stage = JumpController_t::JumpStage_e::JUMP;
-        jump_controller_.tick = HAL_GetTick();
-      }
-      // 自动跳跃
-      else {
-        if (tof_.tof_connect.check() && tof_.tof_data.dis < fdb_.s_D1 * 0.6) {
-          jump_controller_.stage = JumpController_t::JumpStage_e::JUMP;
-          jump_controller_.tick = HAL_GetTick();
-        }
-      }
-    }
   }
   // 起跳阶段
   else if (jump_controller_.stage == JumpController_t::JumpStage_e::JUMP) {
-    ref_.ld = 2.0f;
-    jump_controller_.F_l = jump_controller_.l_pid_jump.calc(ref_.ld, fdb_.l);
-    if (fabs(fdb_.l) > 0.36f || HAL_GetTick() - jump_controller_.tick > 500) {
-      ref_.ld = 0.05f;
-      jump_controller_.stage = JumpController_t::JumpStage_e::RECOVERY;
-      jump_controller_.tick = HAL_GetTick();
-    }
   }
   // 收腿阶段
   else if (jump_controller_.stage == JumpController_t::JumpStage_e::RECOVERY) {
-    ref_.ld = 0.05f;
-    jump_controller_.F_l =
-        jump_controller_.l_pid_recovery.calc(ref_.ld, fdb_.l);
-    if ((fabs(ref_.ld - fdb_.l) < 0.03f &&
-         HAL_GetTick() - jump_controller_.tick > 200) ||
-        HAL_GetTick() - jump_controller_.tick > 240) {
-      ref_.ld = 0.2f;
-      ref_.l = 0.2f;
-      jump_controller_.stage = JumpController_t::JumpStage_e::STRETCH;
-      jump_controller_.tick = HAL_GetTick();
-    }
   }
   // 伸腿缓冲
   else if (jump_controller_.stage == JumpController_t::JumpStage_e::STRETCH) {
-    ref_.l = 0.3f;
-    jump_controller_.F_l = leg_controller_.l_pid.calc(ref_.ld, fdb_.l) * 3;
-    jump_controller_.prepare_stair = false;
-    if ((fabs(ref_.ld - fdb_.l) < 0.05f &&
-         HAL_GetTick() - jump_controller_.tick > 30) ||
-        HAL_GetTick() - jump_controller_.tick > 50) {
-      ref_.ld = 0.05f;
-      jump_controller_.stage = JumpController_t::JumpStage_e::FINISH;
-      jump_controller_.tick = HAL_GetTick();
-    }
   }
 
   // 腿部支持力(覆盖legController中的腿部支持力)
-  u_.F_bll = leg_controller_.F_psi + jump_controller_.F_l +
-             leg_controller_.F_g - leg_controller_.F_i;
-  u_.F_blr = -leg_controller_.F_psi + jump_controller_.F_l +
-             leg_controller_.F_g + leg_controller_.F_i;
+  // u_.F_bll =;
+  // u_.F_blr =;
 }
 
 WBRChassis::LegState_t WBRChassis::LegModel_t::legFkine(
@@ -571,23 +400,7 @@ WBRChassis::LegState_t WBRChassis::LegModel_t::legFkine(
     const float& l_2u, const float k_xe[6], const float k_ye[6]) {
   WBRChassis::LegState_t state;
 
-  float phi1 = q.phi1;
-  float phi2 = q.phi2;
-
-  state.q.phi1 = phi1;
-  state.q.phi2 = phi2;
-
-  state.x1 = l_1a - l_1u * cosf(phi1);
-  state.y1 = l_1u * sinf(q.phi1);
-  state.x2 = l_2a - l_2u * cosf(phi2);
-  state.y2 = l_1u * sinf(q.phi2);
-  state.xe = k_xe[0] + k_xe[1] * phi1 + k_xe[2] * phi2 + k_xe[3] * phi1 * phi1 +
-             k_xe[4] * phi2 * phi2 + k_xe[5] * phi1 * phi2;
-  state.ye = k_ye[0] + k_ye[1] * phi1 + k_ye[2] * phi2 + k_ye[3] * phi1 * phi1 +
-             k_ye[4] * phi2 * phi2 + k_ye[5] * phi1 * phi2;
-
-  state.p.l = sqrtf(state.xe * state.xe + state.ye * state.ye);
-  state.p.theta = atan2f(state.xe, state.ye);
+  // TODO 腿部正运动学解算
 
   return state;
 }
@@ -628,30 +441,17 @@ WBRChassis::LegJacob_t WBRChassis::LegModel_t::legJacob(LegState_t state,
   float x2 = state.x2;
   float y2 = state.y2;
 
-  float Pphi1Pl = 1.f / l_1u *
-                  ((xe + x1) * sinf(theta) + (ye - y1) * cosf(theta)) /
-                  (-(xe + x1) * sinf(phi1) + (ye - y1) * cosf(phi1));
-  float Pphi1Ptheta = l / l_1u *
-                      ((xe + x1) * cosf(theta) - (ye - y1) * sinf(theta)) /
-                      (-(xe + x1) * sinf(phi1) + (ye - y1) * cosf(phi1));
-  float Pphi2Pl = 1.f / l_2u *
-                  ((xe - x2) * sinf(theta) + (ye - y2) * cosf(theta)) /
-                  ((xe - x2) * sinf(phi2) + (ye - y2) * cosf(phi2));
-  float Pphi2Ptheta = l / l_2u *
-                      ((xe - x2) * cosf(theta) - (ye - y2) * sinf(theta)) /
-                      ((xe - x2) * sinf(phi2) + (ye - y2) * cosf(phi2));
+  // TODO 雅可比矩阵计算
 
-  jacob.invJ[0][0] = Pphi1Pl;
-  jacob.invJ[0][1] = Pphi1Ptheta;
-  jacob.invJ[1][0] = Pphi2Pl;
-  jacob.invJ[1][1] = Pphi2Ptheta;
+  jacob.invJ[0][0] =;
+  jacob.invJ[0][1] =;
+  jacob.invJ[1][0] =;
+  jacob.invJ[1][1] =;
 
-  float detJ = 1.f / (jacob.invJ[0][0] * jacob.invJ[1][1] -
-                      jacob.invJ[0][1] * jacob.invJ[1][0]);
-  jacob.J[0][0] = jacob.invJ[1][1] * detJ;
-  jacob.J[0][1] = -jacob.invJ[0][1] * detJ;
-  jacob.J[1][0] = -jacob.invJ[1][0] * detJ;
-  jacob.J[1][1] = jacob.invJ[0][0] * detJ;
+  jacob.J[0][0] =;
+  jacob.J[0][1] =;
+  jacob.J[1][0] =;
+  jacob.J[1][1] =;
 
   jacob.JT[0][0] = jacob.J[0][0];
   jacob.JT[0][1] = jacob.J[1][0];
@@ -659,21 +459,6 @@ WBRChassis::LegJacob_t WBRChassis::LegModel_t::legJacob(LegState_t state,
   jacob.JT[1][1] = jacob.J[1][1];
 
   return jacob;
-}
-
-// 腿部支持力重力补偿前馈
-float WBRChassis::LegController_t::gravity_ff(const float& m_b,
-                                              const float& m_l) {
-  return (m_b * 0.5f + eta_l * m_l) * 9.81f;
-}
-
-// 腿部支持力侧向惯性力矩补偿前馈
-float WBRChassis::LegController_t::inertia_ff(const float& s_D1,
-                                              const float& phi_D1,
-                                              const float& l, const float& m_b,
-                                              const float& m_l,
-                                              const float& R_l) {
-  return (m_b * 0.5f + eta_l * m_l) * l / R_l * s_D1 * phi_D1;
 }
 
 // TOF处理
@@ -687,6 +472,6 @@ void WBRChassis::Tof_t::handle(void) {
   if (!tof_connect.check()) {
     tof_data.dis = 10;
     tof_data.dis_status = 0;
-    acquire_lap = 6000e3;  // 相当于不再读取
+    acquire_lap = 6000e3; // 相当于不再读取
   }
 }
