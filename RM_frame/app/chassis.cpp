@@ -11,6 +11,7 @@
 
 #include "app/chassis.h"
 #include "base/common/math.h"
+#include "base/common/matrix.cpp"
 
 #include <cmath>
 
@@ -401,6 +402,20 @@ WBRChassis::LegState_t WBRChassis::LegModel_t::legFkine(
   WBRChassis::LegState_t state;
 
   // TODO 腿部正运动学解算
+  float phi1 = q.phi1;
+  float phi2 = q.phi2;
+  float phi1_2 =phi1*phi1;
+  float phi2_2 =phi2*phi2;
+  state.q=q;
+  state.x1=l_1a-l_1u*cosf(phi1);
+  state.x2=l_2a-l_2u*cosf(phi2);
+  state.y1=l_1u*sinf(phi1);
+  state.y2=l_2u*sinf(phi2);
+  state.xe = k_xe[0]+k_xe[1]*phi1+k_xe[2]*phi2+k_xe[3]*phi1_2+k_xe[4]*phi2_2+k_xe[5]*phi1*phi2;
+  state.ye = k_ye[0]+k_ye[1]*phi1+k_ye[2]*phi2+k_ye[3]*phi1_2+k_ye[4]*phi2_2+k_ye[5]*phi1*phi2;
+  state.p.l= sqrtf(state.xe*state.xe+state.ye*state.ye);
+  state.p.theta= atan2f(state.xe, state.ye);
+
 
   return state;
 }
@@ -438,20 +453,22 @@ WBRChassis::LegJacob_t WBRChassis::LegModel_t::legJacob(LegState_t state,
   float ye = state.ye;
   float x1 = state.x1;
   float y1 = state.y1;
-  float x2 = state.x2;
+  float x2 =state.x2;
   float y2 = state.y2;
 
   // TODO 雅可比矩阵计算
 
-  jacob.invJ[0][0] =;
-  jacob.invJ[0][1] =;
-  jacob.invJ[1][0] =;
-  jacob.invJ[1][1] =;
+  jacob.invJ[0][0] = 1*((xe+x1)*sinf(theta) + (ye-y1)*cosf(theta))/(l_1u*(-(xe+x1)*sinf(phi1)+(ye-y1)*cosf(phi1)));
+  jacob.invJ[0][1] = l*((xe+x1)*cosf(theta) - (ye-y1)*sinf(theta))/(l_1u*(-(xe+x1)*sinf(phi1)+(ye-y1)*cosf(phi1)));
+  jacob.invJ[1][0] = 1*((xe-x2)*sinf(theta) + (ye-y2)*cosf(theta))/(l_2u*((xe-x2)*sinf(phi2)+(ye-y2)*cosf(phi2)));
+  jacob.invJ[1][1] = l*((xe-x2)*cosf(theta) - (ye-y2)*sinf(theta))/(l_2u*((xe-x2)*sinf(phi2)+(ye-y2)*cosf(phi2)));
 
-  jacob.J[0][0] =;
-  jacob.J[0][1] =;
-  jacob.J[1][0] =;
-  jacob.J[1][1] =;
+  float det_J=jacob.J[0][0]*jacob.J[1][1] - jacob.J[1][0]*jacob.J[0][1];
+
+  jacob.J[0][0] = jacob.J[1][1]/det_J;
+  jacob.J[0][1] = jacob.J[0][1]/det_J;
+  jacob.J[1][0] = jacob.J[1][0]/det_J;
+  jacob.J[1][1] = jacob.J[0][0]/det_J;
 
   jacob.JT[0][0] = jacob.J[0][0];
   jacob.JT[0][1] = jacob.J[1][0];
