@@ -11,9 +11,12 @@
 
 #include "app/chassis.h"
 #include "base/common/math.h"
-#include "base/common/matrix.cpp"
 
 #include <cmath>
+#include "base/remote/remote.h"
+#include "lib/arm_math/arm_math.h"
+
+extern RC rc;
 
 WBRChassis::WBRChassis(Motor* wml, Motor* wmr, Motor* jml1, Motor* jml2,
                        Motor* jmr1, Motor* jmr2, IMU* chassis_imu)
@@ -150,8 +153,13 @@ void WBRChassis::locomotionController(void) {
 void WBRChassis::legController(void) {
   // TODO 腿部控制器设计
 
-  u_.F_bll =;
-  u_.F_blr =;
+  float psi_D1_ref= leg_controller_.psi_ppid.calc(ref_.psid,fdb_.psi);
+  leg_controller_.F_psi= leg_controller_.psi_spid.calc(psi_D1_ref,fdb_.psi_D1);
+  leg_controller_.F_l=leg_controller_.l_pid.calc(ref_.ld,fdb_.l);
+  leg_controller_.F_g=(0.5f*param_.m_b+leg_controller_.eta_l*param_.m_l)*9.81f;//重力补偿前馈
+  leg_controller_.F_i=(0.5f*param_.m_b+leg_controller_.eta_l*param_.m_l)*fdb_.l/(2*param_.R_l)*fdb_.phi_D1*fdb_.s_D1;//侧向力补偿前馈
+  u_.F_bll = leg_controller_.F_psi+ leg_controller_.F_l+leg_controller_. F_g-leg_controller_.F_i;
+  u_.F_blr = -leg_controller_.F_psi+ leg_controller_.F_l+leg_controller_. F_g+leg_controller_.F_i;
 }
 
 // 关节控制器
@@ -332,10 +340,26 @@ void WBRChassis::handleRef(void) {
   // 目标状态处理
   // TODO reference处理（限幅，限变化幅度）
 
+  ref_.sd_D1=math::limit(ref_.sd_D1,-0.5f+ref_.sd_D1,0.5f+ref_.sd_D1);
+  ref_.sd_D1=math::limit(ref_.sd_D1,-0.8f,0.8f);
+  ref_.sd+=ref_.sd_D1*1e-3f;//位置是对速度的积分
+  //ref_.sd=math::limit(ref_.sd,-0.2f+ref_.sd,0.2f+ref_.sd);
+  ref_.phid=math::loopLimit(ref_.phid,fdb_.phi-PI,fdb_.phi+PI);
+  ref_.phid_D1=math::limit(ref_.phid_D1,-ref_.wz_max,ref_.wz_max);
+  ref_.l=math::limit(ref_.l,0.05f,0.2f);
+  ref_.l_extra = math::limit((fabs(ref_.psid) - 0.15f) * 2.5f, 0.f, 0.25f);//额外收腿量与theta_b成正比
+  ref_.ld=math::limit(ref_.l-ref_.l_extra,0.05f,0.2f);
+
   ref_.xd[0] = ref_.sd;
   ref_.xd[1] = ref_.sd_D1;
   ref_.xd[2] = ref_.phid;
   ref_.xd[3] = ref_.phid_D1;
+  ref_.xd[4] = math::limit(ref_.xd[4],-0.1f,0.1f);
+  ref_.xd[5] = math::limit(ref_.xd[5],-0.1f,0.1f);
+  ref_.xd[6] = math::limit(ref_.xd[6],-0.1f,0.1f);
+  ref_.xd[7] = math::limit(ref_.xd[7],-0.1f,0.1f);
+  ref_.xd[8] = math::limit(ref_.xd[8],-0.1f,0.1f);
+  ref_.xd[9] = math::limit(ref_.xd[9],-0.1f,0.1f);
 }
 
 void WBRChassis::crawlController(void) {
