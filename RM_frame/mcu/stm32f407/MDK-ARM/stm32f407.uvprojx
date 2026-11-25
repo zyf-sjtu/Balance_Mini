@@ -10,7 +10,7 @@
       <TargetName>stm32f407</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pCCUsed>6180000::V6.18::ARMCLANG</pCCUsed>
+      <pCCUsed>6240000::V6.24::ARMCLANG</pCCUsed>
       <uAC6>1</uAC6>
       <TargetOption>
         <TargetCommonOption>
@@ -750,44 +750,9 @@
               <FilePath>..\..\..\app\chassis.cpp</FilePath>
             </File>
             <File>
-              <FileName>gimbal.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\app\gimbal.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>shoot.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\app\shoot.cpp</FilePath>
-            </File>
-            <File>
               <FileName>can_monitor.cpp</FileName>
               <FileType>8</FileType>
               <FilePath>..\..\..\app\can_monitor.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>power_limit.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\app\power_limit.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>autoaim.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\app\autoaim.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>board_comm.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\app\board_comm.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>client_ui.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\app\client_ui.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>serial_tool.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\app\serial_tool.cpp</FilePath>
             </File>
             <File>
               <FileName>imu_monitor.cpp</FileName>
@@ -928,48 +893,15 @@
         </Group>
         <Group>
           <GroupName>base/cv_comm</GroupName>
-          <Files>
-            <File>
-              <FileName>cv_comm.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\base\cv_comm\cv_comm.cpp</FilePath>
-            </File>
-          </Files>
         </Group>
         <Group>
           <GroupName>base/cap_comm</GroupName>
-          <Files>
-            <File>
-              <FileName>cap_comm.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\base\cap_comm\cap_comm.cpp</FilePath>
-            </File>
-          </Files>
         </Group>
         <Group>
           <GroupName>base/referee_comm</GroupName>
-          <Files>
-            <File>
-              <FileName>referee_comm.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\base\referee_comm\referee_comm.cpp</FilePath>
-            </File>
-            <File>
-              <FileName>referee_ui.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\base\referee_comm\referee_ui.cpp</FilePath>
-            </File>
-          </Files>
         </Group>
         <Group>
           <GroupName>base/servo</GroupName>
-          <Files>
-            <File>
-              <FileName>servo.cpp</FileName>
-              <FileType>8</FileType>
-              <FilePath>..\..\..\base\servo\servo.cpp</FilePath>
-            </File>
-          </Files>
         </Group>
         <Group>
           <GroupName>base/bsp</GroupName>

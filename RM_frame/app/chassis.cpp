@@ -16,8 +16,6 @@
 #include "base/remote/remote.h"
 #include "lib/arm_math/arm_math.h"
 
-extern RC rc;
-
 WBRChassis::WBRChassis(Motor* wml, Motor* wmr, Motor* jml1, Motor* jml2,
                        Motor* jmr1, Motor* jmr2, IMU* chassis_imu)
   : wml_(wml),
@@ -184,7 +182,7 @@ void WBRChassis::sensor(void) {
   const float joint_angle_l1 =
       param_.joint_reference_angle_deg +
       (jml1_->motor_data_.ecd_angle - param_.joint_encoder_offset_deg[0]) /
-      jml1_->ratio_;
+      jml1_->ratio_;//安装参考角+（实际编码器角度-标定零点）/减速比
   const float joint_angle_l2 =
       param_.joint_reference_angle_deg +
       (jml2_->motor_data_.ecd_angle - param_.joint_encoder_offset_deg[1]) /
@@ -340,14 +338,14 @@ void WBRChassis::handleRef(void) {
   // 目标状态处理
   // TODO reference处理（限幅，限变化幅度）
 
-  ref_.sd_D1=math::limit(ref_.sd_D1,-0.5f+ref_.sd_D1,0.5f+ref_.sd_D1);
+  ref_.sd_D1=math::limit(ref_.sd_D1,-0.5f+fdb_.s_D1,0.5f+fdb_.s_D1);
   ref_.sd_D1=math::limit(ref_.sd_D1,-0.8f,0.8f);
   ref_.sd+=ref_.sd_D1*1e-3f;//位置是对速度的积分
-  //ref_.sd=math::limit(ref_.sd,-0.2f+ref_.sd,0.2f+ref_.sd);
+  //ref_.sd=math::limit(ref_.sd,-0.2f+fdb_.s,0.2f+fdb_.s);
   ref_.phid=math::loopLimit(ref_.phid,fdb_.phi-PI,fdb_.phi+PI);
   ref_.phid_D1=math::limit(ref_.phid_D1,-ref_.wz_max,ref_.wz_max);
   ref_.l=math::limit(ref_.l,0.05f,0.2f);
-  ref_.l_extra = math::limit((fabs(ref_.psid) - 0.15f) * 2.5f, 0.f, 0.25f);//额外收腿量与theta_b成正比
+  ref_.l_extra = math::limit((fabs(fdb_.theta_b) - 0.15f) * 2.5f, 0.f, 0.25f);//额外收腿量与theta_b成正比
   ref_.ld=math::limit(ref_.l-ref_.l_extra,0.05f,0.2f);
 
   ref_.xd[0] = ref_.sd;
@@ -487,7 +485,7 @@ WBRChassis::LegJacob_t WBRChassis::LegModel_t::legJacob(LegState_t state,
   jacob.invJ[1][0] = 1*((xe-x2)*sinf(theta) + (ye-y2)*cosf(theta))/(l_2u*((xe-x2)*sinf(phi2)+(ye-y2)*cosf(phi2)));
   jacob.invJ[1][1] = l*((xe-x2)*cosf(theta) - (ye-y2)*sinf(theta))/(l_2u*((xe-x2)*sinf(phi2)+(ye-y2)*cosf(phi2)));
 
-  float det_J=jacob.J[0][0]*jacob.J[1][1] - jacob.J[1][0]*jacob.J[0][1];
+  float det_J=jacob.invJ[0][0]*jacob.invJ[1][1] - jacob.invJ[1][0]*jacob.invJ[0][1];
 
   jacob.J[0][0] = jacob.J[1][1]/det_J;
   jacob.J[0][1] = jacob.J[0][1]/det_J;

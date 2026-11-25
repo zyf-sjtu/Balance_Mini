@@ -171,6 +171,9 @@ void robotControl(void) {
   else if (rc.switch_.l == RC::DOWN && rc.switch_.r == RC::MID) {
     chassis.mode_ = WBRChassis::STOP;
   }
+  else {
+    chassis.mode_ = WBRChassis::STOP;
+  }
 }
 
 // 板载LED指示灯效果
